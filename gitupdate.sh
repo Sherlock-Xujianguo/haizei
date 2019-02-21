@@ -2,10 +2,6 @@
 git add *
 git commit -m "$1"
 
-set timeout 30
-spawn git push
-expect "com':"
-send "Sherlock-Xujianguo"
-expect "com':"
-send "Xuchaoran123"
-
+echo "UserName: Sherlock-Xujianguo"
+echo "passwd: Xuchaoran123"
+git push
