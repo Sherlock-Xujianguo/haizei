@@ -7,6 +7,12 @@ char *my_name = NULL;
 char *log_file = NULL;
 char *pathname = "../conf/net.conf";
 
+struct Message {
+    char from[20];
+    int flag;
+    char message[100];
+};
+
 void init() {
     server_ip = get_conf_info(pathname, "server_ip", size);
     my_name = get_conf_info(pathname, "my_name", size);
@@ -40,9 +46,10 @@ int main()
             int len = sizeof(addr);
             int recv_fd = accept(fd, (struct sockaddr*)&addr, &len);
             if (recv_fd > 0) {
-                char buf[size] = {0};
-                read(recv_fd, buf, size - 1);
-                printf("%s\n", buf);
+                char buf[sizeof(struct Message)];
+                recv(recv_fd, buf, sizeof(buf), 0);
+                struct Message *m = (struct Message*)buf;
+                printf("%s : %s\n", m -> from, m -> message);
             }
             close(recv_fd);
         }
@@ -51,6 +58,8 @@ int main()
         if ((fd = create_send_socket(server_port, server_ip)) < 0) {
             return -1;
         }
+        char *name = "徐浩然";
+        send(fd, name, strlen(name) + 1, 0);
         while (1) {
             char buf[size] = {0};
             for (int i = 0; i < size; i++) {
@@ -60,9 +69,16 @@ int main()
                     break;
                 }
             }
-            buf[1024] = '\0';
+            buf[1023] = '\0';
+            struct Message m;
+            strcpy(m.from, name);
+            if (buf[0] == '@') m.flag = 1;
+            else m.flag = 0;
+            strcpy(m.message, buf);
             if (strcmp(buf, "close") == 0) break;
-            write(fd, buf, strlen(buf));
+            char send_m[size];
+            memcpy(send_m, &m, sizeof(m));
+            send(fd, send_m, size, 0);
         }
         close(fd);
         exit(0);

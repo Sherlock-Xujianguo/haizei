@@ -1,4 +1,5 @@
 #include "../common/common.h"
+#include "../common/netlinklist.h"
 #define size 1024
 
 int client_port;
@@ -11,26 +12,15 @@ char *pathname = "../conf/net.conf";
 struct Message {
     char from[20];
     int flag;
-    char message[size];
+    char message[100];
 };
 
-struct user {
-    char name[20];
-    char ip[20];
-} users[30];
-int u_num = 0;
-
-void add_user(struct sockaddr_in addr, char *name) {
-     strcpy(users[u_num].name, name);
-     strcpy(users[u_num].ip, inet_ntoa(addr.sin_addr));
-     printf("hello %s from %s\n", users[u_num].name, users[u_num].ip);
-     u_num++;
-}
+Linklist *l;
 
 char* get_tar_name(char *buf) {
     char *temp = (char *)malloc(sizeof(char) * 20);
-    for (int i = 1; i < strlen(buf); i++) {
-        if (buf[i] == ' ') {
+    for (int i = 1; i <= strlen(buf); i++) {
+        if (buf[i] == ' ' || buf[i] == '\0') {
             temp[i - 1] = '\0';
             return temp;
         } else {
@@ -39,32 +29,20 @@ char* get_tar_name(char *buf) {
     }
 }
 
-void get_tar_message(char *m, char *buf) {
-    int i;
-    for (i = 0; i < strlen(buf); i++) {
-        if (buf[i] == ' ') break;
-    }
-    int len = 0;
-    for (i++; i < strlen(buf); i++, len++) {
-        m[len] = buf[i];
-    }
-    m[len] = '\0';
-}
-
-int send_message(char *tar_name, char *m) {
-
-    for (int i = 0; i < u_num; i++) {
-        if (strcmp(users[i].name, tar_name) == 0) {
-            int send_fd = create_send_socket(client_port, users[i].ip);
+int send_message(char *buf) {
+    struct Message *m;
+    m = (struct Message *)buf;
+    char *tar_name = get_tar_name(m -> message);
+    Node *n = l -> head;
+    while (n != NULL) {
+        if (strcmp(n -> user_info.name, tar_name) == 0) {
+            int send_fd = create_send_socket(client_port, n -> user_info.ip);
             if (send_fd < 0) {
                 close(send_fd);
                 return -1;
             }
-            char final_message[size] = {0};
-            strcat(final_message, tar_name);
-            strcat(final_message, ": ");
-            strcat(final_message, m);
-            if (write(send_fd, final_message, strlen(final_message)) > 0) {
+            if (send(send_fd, buf, size, 0) > 0) {
+                printf("%s : %s\n", m -> from, m -> message);
                 close(send_fd);
                 return 1;
             }
@@ -75,14 +53,19 @@ int send_message(char *tar_name, char *m) {
 }
 
 void send_all(char *buf){
-    for (int i = 0; i < u_num; i++) {
-        int send_fd = create_send_socket(client_port, users[i].ip);
+    Node* n = l -> head;
+    while (n != NULL) {
+        int send_fd = create_send_socket(client_port, n -> user_info.ip);
         if (send_fd < 0) {
+            perror("create_send_socket error");
             close(send_fd);
             continue;
         }
-        write(send_fd, buf, strlen(buf));
+        send(send_fd, buf, size, 0);
+        struct Message *m = (struct Message *)buf;
+        printf("%s : %s\n", m -> from, m -> message);
         close(send_fd);
+        n = n -> next;
     }
 }
 
@@ -96,32 +79,51 @@ void init() {
     free(temp);
     server_ip = get_conf_info(pathname, "server_ip", size);
     log_file =get_conf_info(pathname, "log_file", size);
+    l = (Linklist*)malloc(sizeof(Linklist));
+    l -> head = NULL;
+    l -> num = 0;
 }
 
 void work(int recv_fd) {
     char buf[size];
     while (1) {
         memset(buf, 0, sizeof(buf));
-        int read_flag = read(recv_fd, buf, size-1);
+        int read_flag = recv(recv_fd, buf, size, 0);
         if (read_flag < 0) {
             perror("read error");
             break;
         } else if (read_flag == 0) {
             break;
         } else {
-            if (buf[0] == '@') {
-                char *tar_name = NULL;
-                tar_name = get_tar_name(buf);
-                char m[size] = {0};
-                get_tar_message(m, buf);
-                send_message(tar_name, m);
-                free(tar_name);
+            struct Message *m;
+            m = (struct Message*)buf;
+            FILE *fp = fopen(log_file, "a+");
+            if (fp != NULL) {
+                fputs(m -> from, fp);
+                fputs(": ", fp);
+                fputs(m -> message, fp);
+                fputs("\n", fp);
+            }
+            fclose(fp);
+
+            if (m -> message[0] == '@') {
+                send_message(buf);
             } else {
                 send_all(buf);
             }
         }
     }
     close(recv_fd);
+}
+
+void print() {
+    printf("\n");
+    Node* n = l -> head;
+    while (n != NULL) {
+        printf("%s : %s\n", n -> user_info.name, n -> user_info.ip);
+        n = n -> next;
+    }
+    printf("\n");
 }
 
 
@@ -140,10 +142,8 @@ int main()
         struct sockaddr_in recv_addr;
         int addr_len = sizeof(recv_addr);
         if ((recv_fd = accept(fd, (struct sockaddr*)&recv_addr, &addr_len)) > 0) {
-            //将用户加入队列
-
             char name[20] = {0};
-            read(recv_fd, name, 19);
+            recv(recv_fd, name, 19, 0);
             int fid = fork();
             if (fid == -1) {
                 perror("fork error");
@@ -151,13 +151,11 @@ int main()
                 break;
             }
             if (fid == 0) {
-                add_user(recv_addr, name);
+                insert_node(name, recv_addr, l);
                 close(fd);
                 work(recv_fd);
-                //将用户移除队列
+                del_node(name, l);
                 printf("good bye\n");               
-
-
                 break;
             }
             else {
