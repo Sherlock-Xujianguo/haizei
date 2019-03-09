@@ -1,10 +1,35 @@
 #!/bin/bash
-time="`date +%F`__`date +%T`"
-meminfo=`free -m | tail -n -2 | head -n 1 | awk 'BEGIN{} {printf("%d %d",$2,$4)} END{}'`
-total="`echo $meminfo | cut -d " " -f 1`"
-free="`echo $meminfo | cut -d " " -f 2`"
-upper=$((total-free))
-useper1=$(echo "scale=1;$upper*100/$total"|bc)
-useper2=$(echo "scale=1;0.3*$1+0.7*$useper1"|bc)
+#Using for gathering information of Mem
 
-echo "$time $total"M" $free"M" $useper1"%" $useper2"%
+function Usage() {
+	echo "Usage: $0 DyAver"
+}
+
+if [[ $# -lt 1 ]]; then
+	Usage
+	exit 1
+fi
+
+source ./PiHealth.conf 2>> /dev/zero
+if [[ $? -ne 0 ]]; then
+	source ./script/PiHealth.conf
+	if [[ $? -ne 0 ]]; then
+		exit
+	fi
+fi
+#$1 is the  dynamic average of the Mem occupancy
+DyAver=$1 	
+
+if [[ x"$DyAver" = x ]]; then
+	exit 1
+fi
+
+MemValue=(`free -m | head -n 2 | tail -n 1 | awk '{printf("%s %s\n",$2,$3) }'`)
+MemAvaPrec=`echo "scale=1;${MemValue[1]}*100/${MemValue[0]}" | bc`
+NowAver=`echo "scale=1;0.8*${MemAvaPrec}+0.2*${DyAver}" | bc`
+
+
+NowTime=`date +"%Y-%m-%d__%H:%M:%S"`
+echo "$NowTime ${MemValue[0]}M ${MemValue[1]}M ${MemAvaPrec}% ${NowAver}%" #>> $MemLog
+echo ${NowAver}
+

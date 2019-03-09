@@ -8,10 +8,13 @@ if [[ $# -ge 1 ]]; then
 	exit 1
 fi
 
-source ./PiHealth.conf
+source ./PiHealth.conf 2>> /dev/zero
 
 if [[ $? -ne 0 ]]; then
-	exit 1
+	source ./script/PiHealth.conf
+	if [[ $? -ne 0 ]]; then
+		exit
+	fi
 fi
 
 NowTime=`date +"%Y-%m-%d__%H:%M:%S"`
@@ -39,16 +42,4 @@ elif [[ `echo $CpuTemp '>=' 50 | bc -l` = 1 ]]; then
 	WarnLevel="note"
 fi
 
-echo "$NowTime $LoadAvg $CpuUsedPerc ${CpuTemp}°C $WarnLevel" >> $CpuLog
-
-
-
-
-
-
-
-
-
-
-
-
+echo "$NowTime $LoadAvg $CpuUsedPerc ${CpuTemp}°C $WarnLevel" #>> $CpuLog

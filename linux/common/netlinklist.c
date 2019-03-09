@@ -8,8 +8,6 @@ void insert_node(char *name, struct sockaddr_in addr, Linklist *l) {
         strcpy(n -> user_info.ip, inet_ntoa(addr.sin_addr));
         strcpy(n -> user_info.name, name);
         l -> head = n;
-        printf("%s from %s is online\n", l -> head -> user_info.name, l -> head \
-               -> user_info.ip);
         l -> num++;
     } else {
         Node* n = l -> head;

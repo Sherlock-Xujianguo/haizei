@@ -1,5 +1,6 @@
 #include "../common/common.h"
 #include "../common/netlinklist.h"
+#include <pthread.h>
 #define size 1024
 
 int client_port;
@@ -16,6 +17,14 @@ struct Message {
 };
 
 Linklist *l;
+
+void hello_info(char *name) {
+    printf("%s 上线，当前在线人数%d\n", name, l -> num);
+}
+
+void bye_info(char *name) {
+    printf("%s 下线，当前在线人数%d\n", name, l -> num);
+}
 
 char* get_tar_name(char *buf) {
     char *temp = (char *)malloc(sizeof(char) * 20);
@@ -84,7 +93,8 @@ void init() {
     l -> num = 0;
 }
 
-void work(int recv_fd) {
+void *work(void *argv) {
+    int recv_fd = *(int *)argv;
     char buf[size];
     while (1) {
         memset(buf, 0, sizeof(buf));
@@ -152,9 +162,11 @@ int main()
             }
             if (fid == 0) {
                 insert_node(name, recv_addr, l);
+                hello_info(name);
                 close(fd);
                 work(recv_fd);
                 del_node(name, l);
+                bye_info(name);
                 printf("good bye\n");               
                 break;
             }

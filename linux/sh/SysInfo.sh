@@ -8,10 +8,13 @@ if [[ $# -ge 1 ]]; then
 	exit 1
 fi
 
-source ./PiHealth.conf
+source ./PiHealth.conf 2>> /dev/zero
 
 if [[ $? -ne 0 ]]; then
-	exit 1
+	source ./script/PiHealth.conf
+	if [[ $? -ne 0 ]]; then
+		exit
+	fi
 fi
 
 NowTime=`date +"%Y-%m-%d__%H:%M:%S"`
@@ -69,4 +72,4 @@ fi
 
 echo "$NowTime $HostName $OsType $KernelVersion $UpTime $LoadAvg \
 $DiskSum ${DiskUsedPercSum}% $MemSum ${MemUsedPerc}% $CpuTemp $DiskWarningLevel \
-$MemWarningLevel $CpuWarnLevel" >> $SysInfoLog
+$MemWarningLevel $CpuWarnLevel" #>> $SysInfoLog
